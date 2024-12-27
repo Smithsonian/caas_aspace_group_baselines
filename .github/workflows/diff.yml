@@ -1,0 +1,69 @@
+name: Diff after_create method
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/model/**'
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    env:
+      PROD_ARCHIVESSPACE_VERSION: v3.3.1
+    continue-on-error: true
+    strategy:
+      matrix:
+        archivesspace_version: [v3.3.1, v3.4.1, v3.5.1]
+    steps:
+
+    - name: Checkout current plugin
+      uses: actions/checkout@v4
+      with:
+        path: plugin
+        sparse-checkout: |
+          backend/model
+
+    - name: Checkout ArchivesSpace baseline repo
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ env.PROD_ARCHIVESSPACE_VERSION }}
+        repository: Smithsonian/archivesspace
+        path: archivesspace-baseline
+        sparse-checkout: |
+          backend/app/model
+
+    - name: Checkout ArchivesSpace repo
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ matrix.archivesspace_version }}
+        repository: Smithsonian/archivesspace
+        path: archivesspace
+        sparse-checkout: |
+          backend/app/model
+
+    - name: Diff with baseline
+      id: baseline
+      run: |
+        echo "baseline_changes=$(git diff --diff-filter=M --shortstat ${{ github.workspace }}/archivesspace-baseline/backend/app/model ${{ github.workspace }}/plugin/backend/model)" > $GITHUB_OUTPUT
+   
+    - name: Diff with new versions
+      id: new
+      run: |
+        echo "new_changes=$(git diff --diff-filter=M --shortstat ${{ github.workspace }}/archivesspace/backend/app/model ${{ github.workspace }}/plugin/backend/model)" > $GITHUB_OUTPUT
+
+    - name: Diffs match
+      if: ${{ steps.baseline.outputs.baseline_changes == steps.new.outputs.new_changes }}
+      run: |
+        echo "${{ steps.baseline.outputs.baseline_changes }}"
+        echo "${{ steps.new.outputs.new_changes }}"
+        echo "${{ steps.new.outputs.new_changes2 }}"
+        echo "All models overridden by this plugin match $PROD_ARCHIVESSPACE_VERSION of ArchivesSpace"
+
+    - name: Diffs do not match
+      if: ${{ steps.baseline.outputs.baseline_changes != steps.new.outputs.new_changes }}
+      run: |
+        echo "Some models overridden by this plugin do not match those in ArchivesSpace ${{ matrix.archivesspace_version }}.  See:"
+        echo "::set-output name=review_changes::$(git diff --diff-filter=M -w --color -- ${{ github.workspace }}/archivesspace/backend/app/model ${{ github.workspace }}/plugin/backend/model)"
+        exit 1
