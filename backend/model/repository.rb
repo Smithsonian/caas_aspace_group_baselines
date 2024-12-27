@@ -70,7 +70,7 @@ class Repository
                        {
                          :group_code => "repository-viewers",
                          :description => I18n.t("group.default_group_names.repository_viewers", :repo_code => repo_code),
-                         :grants_permissions => ["view_repository", "create_job"]
+                         :grants_permissions => ["view_repository", "new_madeup_permission"]
                        }]
 
     RequestContext.open(:repo_id => self.id) do
