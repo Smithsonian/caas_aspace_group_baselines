@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'backend/model/**'
+  push:
 
 jobs:
   diff:
@@ -43,27 +44,43 @@ jobs:
         sparse-checkout: |
           backend/app/model
 
+    - name: Create plugin file
+      run: |
+        touch plugin.txt
+        grep -wsh after_create ${{ github.workspace }}/plugin/backend/model/* -A 81 > plugin.txt
+
+    - name: Create prod version file
+      id: prod
+      run: |
+        touch prod.txt
+        grep -wsh after_create ${{ github.workspace }}/archivesspace-baseline/backend/app/model/repository.rb -A 81 > prod.txt
+
+    - name: Create ${{ matrix.archivesspace_version }} version file
+      run: |
+        touch ${{ matrix.archivesspace_version }}.txt
+        grep -wsh after_create ${{ github.workspace }}/archivesspace/backend/app/model/repository.rb -A 81 > ${{ matrix.archivesspace_version }}.txt
+
     - name: Diff with baseline
       id: baseline
       run: |
-        echo "baseline_changes=$(git diff --diff-filter=M --shortstat ${{ github.workspace }}/archivesspace-baseline/backend/app/model ${{ github.workspace }}/plugin/backend/model)" > $GITHUB_OUTPUT
-   
+        echo "baseline_changes=$(git diff --diff-filter=M --shortstat ${{ github.workspace }}/prod.txt ${{ github.workspace }}/plugin.txt)" >> $GITHUB_OUTPUT
+    
     - name: Diff with new versions
       id: new
       run: |
-        echo "new_changes=$(git diff --diff-filter=M --shortstat ${{ github.workspace }}/archivesspace/backend/app/model ${{ github.workspace }}/plugin/backend/model)" > $GITHUB_OUTPUT
+        echo "new_changes=$(git diff --diff-filter=M --shortstat ${{ github.workspace }}/${{ matrix.archivesspace_version }}.txt ${{ github.workspace }}/plugin.txt)" >> $GITHUB_OUTPUT
 
     - name: Diffs match
       if: ${{ steps.baseline.outputs.baseline_changes == steps.new.outputs.new_changes }}
       run: |
         echo "${{ steps.baseline.outputs.baseline_changes }}"
         echo "${{ steps.new.outputs.new_changes }}"
-        echo "${{ steps.new.outputs.new_changes2 }}"
-        echo "All models overridden by this plugin match $PROD_ARCHIVESSPACE_VERSION of ArchivesSpace"
+        echo "$(git diff --diff-filter=M -w --color -- ${{ github.workspace }}/${{ matrix.archivesspace_version }}.txt ${{ github.workspace }}/plugin.txt)"
+        echo "All models overridden by this plugin match ${{ matrix.archivesspace_version }} of ArchivesSpace"
 
     - name: Diffs do not match
       if: ${{ steps.baseline.outputs.baseline_changes != steps.new.outputs.new_changes }}
       run: |
         echo "Some models overridden by this plugin do not match those in ArchivesSpace ${{ matrix.archivesspace_version }}.  See:"
-        echo "::set-output name=review_changes::$(git diff --diff-filter=M -w --color -- ${{ github.workspace }}/archivesspace/backend/app/model ${{ github.workspace }}/plugin/backend/model)"
+        echo "::set-output name=review_changes::$(git diff --diff-filter=M -w --color -- ${{ github.workspace }}/${{ matrix.archivesspace_version }}.txt ${{ github.workspace }}/plugin.txt)"
         exit 1
